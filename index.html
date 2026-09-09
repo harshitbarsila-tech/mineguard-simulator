@@ -1,1 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MineGuard 3D Predictive Safety Simulator</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#101318;font-family:Arial,sans-serif;color:#fff}
+#hud{position:absolute;inset:0;pointer-events:none}
+.panel{position:absolute;background:rgba(8,12,18,.84);border:1px solid rgba(255,255,255,.16);border-radius:12px;backdrop-filter:blur(7px);box-shadow:0 8px 30px #0008}
+#brand{left:18px;top:16px;padding:9px 13px;display:flex;align-items:center;gap:10px;z-index:5}
+#brandLogo{width:54px;height:54px;flex:0 0 54px}
+#brandText .mine{font-size:21px;font-weight:900;letter-spacing:1.5px}
+#brandText .sub{font-size:11px;color:#c7d0da;letter-spacing:1px;margin-top:2px}
+#status{right:18px;top:18px;width:275px;padding:14px}
+.row{display:flex;justify-content:space-between;margin:7px 0;font-size:14px}
+.value{font-weight:800;text-align:right}
+#risk{font-size:18px;text-align:center;margin-top:10px;padding:9px;border-radius:8px;background:#167d39}
+#warning{left:50%;top:16%;transform:translateX(-50%);padding:14px 24px;font-weight:900;font-size:24px;display:none;text-align:center;z-index:4}
+#controls{left:18px;bottom:18px;width:320px;padding:14px;pointer-events:auto;max-height:74vh;overflow:auto}
+button,select{width:100%;margin:5px 0;padding:10px;border:0;border-radius:8px;font-weight:700;cursor:pointer}
+button{background:#f0b429;color:#111}
+button.secondary{background:#2b3442;color:#fff}
+input{accent-color:#f0b429}
+#results{right:18px;bottom:18px;width:275px;padding:14px;display:none}
+.small{font-size:12px;color:#b9c2cf}
+#legend{left:50%;bottom:18px;transform:translateX(-50%);padding:8px 12px;font-size:12px;max-width:92vw;text-align:center}
+#sensorBoard{left:50%;top:18px;transform:translateX(-50%);padding:9px 14px 11px;text-align:center;z-index:5;min-width:260px}
+#sensorTitle{font-size:11px;font-weight:900;letter-spacing:1.4px;margin-bottom:7px;color:#dce4eb}
+.sensorRow{display:flex;gap:10px;align-items:center;justify-content:center}
+.sensor{width:52px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;border:2px solid #777;opacity:.25;box-shadow:inset 0 0 8px #0008}
+.sensor.green{background:#18b957;border-color:#39ef7b}
+.sensor.yellow{background:#e4ad18;border-color:#ffe06a}
+.sensor.red{background:#d92d2d;border-color:#ff6b6b}
+.sensor.active{opacity:1;box-shadow:0 0 16px currentColor,inset 0 0 8px #fff5}
+.sensor.blink{animation:blink .55s infinite alternate}
+@keyframes blink{from{opacity:.28;filter:brightness(.8)}to{opacity:1;filter:brightness(1.8)}}
+#aiDetect{margin-top:8px;font-weight:900;font-size:13px;letter-spacing:.3px;padding:5px 8px;border-radius:6px;background:#0009}
+#aiDetect.pulse{animation:blink .5s infinite alternate}
+#fogValue{font-weight:900}
+#visModalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:30;pointer-events:auto}
+#visModal{width:320px;padding:20px}
+#visModal h3{margin:0 0 12px;font-size:15px;letter-spacing:.4px}
+#visModalVal{font-weight:900}
+canvas{display:block}
+</style>
+</head>
+<body>
+<div id="hud">
+
+  <div id="brand" class="panel">
+    <svg id="brandLogo" viewBox="0 0 100 100" aria-label="MineGuard logo">
+      <circle cx="50" cy="50" r="47" fill="#101820" stroke="#f0b429" stroke-width="5"/>
+      <path d="M20 62 L25 45 L61 45 L73 55 L83 55 L87 72 L18 72 Z" fill="#e0a400" stroke="#fff" stroke-width="2"/>
+      <path d="M62 45 L72 54 L61 54 L61 45Z" fill="#26343c"/>
+      <circle cx="31" cy="73" r="8" fill="#1a1d20" stroke="#aaa" stroke-width="2"/>
+      <circle cx="73" cy="73" r="8" fill="#1a1d20" stroke="#aaa" stroke-width="2"/>
+      <path d="M48 20 L48 82" stroke="#f3f5f7" stroke-width="5"/>
+      <path d="M29 27 Q50 13 71 27" fill="none" stroke="#f3f5f7" stroke-width="5" stroke-linecap="round"/>
+      <path d="M29 27 L22 33 M71 27 L78 33" stroke="#f3f5f7" stroke-width="4" stroke-linecap="round"/>
+    </svg>
+    <div id="brandText">
+      <div class="mine">MINEGUARD</div>
+      <div class="sub">3D PREDICTIVE SAFETY SIMULATOR</div>
+    </div>
+  </div>
+
+  <div id="sensorBoard" class="panel">
+    <div id="sensorTitle">FRONT PROXIMITY SENSOR BOARD</div>
+    <div class="sensorRow">
+      <div id="sg" class="sensor green">GREEN</div>
+      <div id="sy" class="sensor yellow">YELLOW</div>
+      <div id="sr" class="sensor red">RED</div>
+    </div>
+    <div class="small" id="sensorRange">GREEN • NO OBSTACLE WITHIN 40 m</div>
+    <div id="aiDetect">STATUS: MONITORING — NO OBJECT IN RANGE</div>
+  </div>
+
+  <div id="status" class="panel">
+    <div class="row"><span>Speed</span><span id="speed" class="value">32 km/h</span></div>
+    <div class="row"><span>Object</span><span id="object" class="value">None</span></div>
+    <div class="row"><span>Distance</span><span id="distance" class="value">—</span></div>
+    <div class="row"><span>TTC</span><span id="ttc" class="value">SAFE</span></div>
+    <div class="row"><span>Sensor</span><span class="value">ACTIVE</span></div>
+    <div class="row"><span>Road</span><span id="roadValue" class="value">PLAIN</span></div>
+    <div class="row"><span>Condition</span><span id="envValue" class="value">HEAVY FOG</span></div>
+    <div class="row"><span>Visibility</span><span id="fogValue" class="value">45%</span></div>
+    <div id="risk">LOW RISK</div>
+  </div>
+
+  <div id="warning" class="panel">⚠ MINEGUARD WARNING</div>
+
+  <div id="controls" class="panel">
+    <div style="font-weight:800;margin-bottom:6px">OBSTACLE TYPE</div>
+    <select id="scenario">
+      <option value="truck">Stationary Mining Truck</option>
+      <option value="worker">Worker on Haul Road</option>
+      <option value="rock">Boulder / Rock on Road</option>
+      <option value="crane">Block-Type Mining Crane</option>
+      <option value="oncomingCar">Wrong-Side Oncoming Car</option>
+      <option value="oncomingTruck">Wrong-Side Oncoming Mine Truck</option>
+      <option value="wreckCrane">Wrong-Side Vehicle — Crashed into Crane</option>
+      <option value="wreckRavine">Wrong-Side Vehicle — Ravine Accident</option>
+    </select>
+
+    <div style="font-weight:800;margin:10px 0 6px">ENVIRONMENT CONDITION</div>
+    <select id="environment">
+      <option value="clear">Clear Day</option>
+      <option value="fog" selected>Heavy Fog / Dust</option>
+      <option value="night">Night — Low Visibility</option>
+      <option value="rain">Rainy Season — Low Visibility</option>
+      <option value="zerovis">Zero Visibility — Dust Storm</option>
+    </select>
+
+    <button id="openVisBtn" type="button" class="secondary">🔧 VISIBILITY: <span id="visBtnVal">45%</span> — TAP TO ADJUST</button>
+
+    <label class="small">Truck speed: <span id="speedLabel">32</span> km/h</label>
+    <input id="speedSlider" type="range" min="10" max="60" value="32" style="width:100%">
+
+    <button id="start">START TEST</button>
+    <button id="reset" class="secondary">RESET</button>
+    <div class="small" style="margin-top:6px">
+      Detection only demo: the truck keeps moving and collides with the detected obstacle.
+      Sensor + AI verification work independently of visibility.
+    </div>
+  </div>
+
+  <div id="results" class="panel">
+    <div style="font-weight:800">SIMULATION RESULT</div>
+    <div class="row"><span>Detection</span><span>✓</span></div>
+    <div class="row"><span>AI Verification</span><span id="aiResult">—</span></div>
+    <div class="row"><span>Sensor zone</span><span id="zoneResult">—</span></div>
+    <div class="row"><span>Collision</span><span id="collisionResult">—</span></div>
+    <div class="row"><span>Min distance</span><span id="clearance">—</span></div>
+  </div>
+
+  <div id="legend" class="panel">
+    🟢 &gt;40m SAFE &nbsp; 🟡 30–40m WARNING &nbsp; 🔴 0–30m CRITICAL
+    &nbsp;|&nbsp; Sensor range is unaffected by fog/night/rain &nbsp;|&nbsp; Truck does NOT auto-brake
+  </div>
+
+  <div id="visModalBackdrop">
+    <div id="visModal" class="panel">
+      <h3>SET VISIBILITY — <span id="visModalEnv">HEAVY FOG</span></h3>
+      <label class="small"><span id="visModalDesc">Fog / Dust Density</span>: <span id="visModalVal">45</span>%</label>
+      <input id="fogSlider" type="range" min="0" max="100" value="45" style="width:100%">
+      <div class="small" style="margin-top:8px">Default is a realistic 40–50% visibility loss. Adjust as needed, then press START TEST — this window closes automatically when the run begins.</div>
+      <button id="visModalClose" class="secondary" style="margin-top:10px" type="button">CLOSE PREVIEW</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+let scene,camera,renderer,truck,truckBody,obstacle,sensor,road;
+let hemiLight,sunLight,headlightL,headlightR,rain;
+let worldGroup=null,buildTarget=null;
+const roadType='plain';
+let running=false,elapsed=0,minClear=999,collisionShown=false;
+let speedKmh=32,speed=32/3.6,obstacleZ=-115,obstacleType='truck';
+const $=id=>document.getElementById(id);
+
+const SCAN_RANGE=55;   // AI sensor starts analyzing a potential object
+const SCAN_TIME=0.5;   // seconds for the AI to "verify" before confirming
+let aiState='idle',aiTimer=0;
+
+const ENV_LABELS={clear:'CLEAR DAY',fog:'HEAVY FOG',night:'NIGHT — LOW VISIBILITY',rain:'RAINY — LOW VISIBILITY',zerovis:'ZERO VISIBILITY'};
+const ENV_DEFAULT_SEVERITY={clear:15,fog:45,night:45,rain:50,zerovis:100};
+const ENV_SLIDER_LABEL={clear:'Ambient Haze',fog:'Fog / Dust Density',night:'Darkness Severity',rain:'Rain Intensity',zerovis:'Whiteout / Dust Density'};
+const ENV_SLIDER_MAX={clear:100,fog:100,night:100,rain:100,zerovis:150};
+
+function mat(c,rough=.8){return new THREE.MeshStandardMaterial({color:c,roughness:rough})}
+function box(w,h,d,m,x,y,z){
+  let o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
+  o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;
+  (buildTarget||scene).add(o);return o
+}
+function cyl(r,h,m,x,y,z,rotX=0){
+  let o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,20),m);
+  o.position.set(x,y,z);o.rotation.x=rotX;o.castShadow=true;
+  (buildTarget||scene).add(o);return o
+}
+
+function init(){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x858d91);
+
+  camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,700);
+  camera.position.set(0,7,15);
+
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.shadowMap.enabled=true;
+  document.body.prepend(renderer.domElement);
+
+  hemiLight=new THREE.HemisphereLight(0xd8e7ef,0x4b3b2c,1.8);
+  scene.add(hemiLight);
+  sunLight=new THREE.DirectionalLight(0xffffff,1.8);
+  sunLight.position.set(-40,90,35);sunLight.castShadow=true;scene.add(sunLight);
+
+  buildWorld(roadType);
+  makeTruck();
+  makeSensor();
+  makeHeadlights();
+  makeRain();
+  resetScenario();
+
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight)
+  });
+
+  $('speedSlider').oninput=e=>{
+    speedKmh=+e.target.value;
+    $('speedLabel').textContent=speedKmh
+  };
+  $('fogSlider').oninput=e=>{
+    $('visModalVal').textContent=e.target.value;
+    updateVisibility();
+  };
+  $('scenario').onchange=()=>resetScenario();
+  $('environment').onchange=()=>openVisModal();
+  $('openVisBtn').onclick=()=>openVisModal();
+  $('visModalClose').onclick=()=>{ $('visModalBackdrop').style.display='none'; };
+  $('start').onclick=startTest;
+  $('reset').onclick=resetScenario;
+
+  animate();
+}
+
+function openVisModal(){
+  const env=$('environment').value;
+  const defaultSeverity=ENV_DEFAULT_SEVERITY[env];
+  $('fogSlider').max=ENV_SLIDER_MAX[env];
+  $('fogSlider').value=defaultSeverity;
+  $('visModalVal').textContent=defaultSeverity;
+  $('visModalDesc').textContent=ENV_SLIDER_LABEL[env];
+  $('visModalEnv').textContent=ENV_LABELS[env];
+  updateVisibility();
+  $('visModalBackdrop').style.display='flex';
+}
+
+function updateVisibility(){
+  const env=$('environment').value;
+  const severity=+$('fogSlider').value;
+  let color,density,bg;
+
+  if(env==='clear'){
+    color=0xaeb7bd; density=0.0015+(severity/100)*0.006; bg=0x8fa0ab;
+  }else if(env==='fog'){
+    color=0x9aa5ad; density=0.006+(severity/100)*0.026; bg=0x858d91;
+  }else if(env==='night'){
+    color=0x0a1018; density=0.004+(severity/100)*0.032; bg=0x03060a;
+  }else if(env==='rain'){
+    color=0x5a6570; density=0.010+(severity/100)*0.036; bg=0x4a5560;
+  }else{ // zerovis — dust storm whiteout, ranges 0-150%
+    color=0xb8ac96; density=0.006+(severity/100)*0.09; bg=0xab9c88;
+  }
+
+  scene.fog=new THREE.FogExp2(color,density);
+  scene.background=new THREE.Color(bg);
+  $('fogValue').textContent=severity+'%';
+  $('envValue').textContent=ENV_LABELS[env];
+  $('visBtnVal').textContent=severity+'%';
+
+  if(env==='night'){
+    hemiLight.intensity=0.22; hemiLight.color.set(0x1b2735); hemiLight.groundColor.set(0x000000);
+    sunLight.intensity=0.04;
+    headlightL.visible=true; headlightR.visible=true;
+  }else{
+    hemiLight.intensity=1.8; hemiLight.color.set(0xd8e7ef); hemiLight.groundColor.set(0x4b3b2c);
+    sunLight.intensity= env==='rain'?0.55: env==='zerovis'?0.35:1.8;
+    headlightL.visible=false; headlightR.visible=false;
+  }
+
+  rain.visible = (env==='rain');
+}
+
+function buildWorld(type){
+  if(worldGroup){
+    scene.remove(worldGroup);
+    worldGroup.traverse(o=>{ if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); });
+  }
+  worldGroup=new THREE.Group();
+  scene.add(worldGroup);
+  buildTarget=worldGroup;
+  makePlainRoad();
+  buildTarget=null;
+}
+
+function makeCrane(x,z){
+  let dark=mat(0x24282a), steel=mat(0x566066), yellow=mat(0xd09b00);
+  box(5,1.2,5,dark,x,.6,z);
+  box(.9,10,.9,steel,x,5.5,z);
+  box(10,.8,.8,yellow,x+3,10.0,z);
+  box(.55,5,.55,steel,x+7.4,7.5,z);
+  box(.35,5,.35,dark,x+7.4,5.1,z);
+  box(2.2,.8,1.4,yellow,x+7.4,2.2,z);
+  box(1.0,.4,1.0,dark,x+7.4,1.0,z);
+}
+
+function makePlainRoad(){
+  let ground=box(240,1,520,mat(0x6f665b),0,-.5,-100);
+  ground.receiveShadow=true;
+
+  road=box(18,.15,520,mat(0x47433e),0,.05,-100);
+
+  for(let z=-255;z<120;z+=16){
+    box(.18,.04,7,mat(0xc4ad78),0,.14,z);
+  }
+
+  for(let z=-255;z<120;z+=12){
+    box(1.8,1.4,7,mat(0x8e7962),-10.2,.7,z);
+    box(1.8,1.4,7,mat(0x8e7962),10.2,.7,z);
+  }
+
+  for(let i=0;i<6;i++){
+    let z=-140-i*42;
+    box(42,8,18,mat(0x5e5449),-43,4,z);
+    box(42,8,18,mat(0x5e5449),43,4,z);
+    box(42,1.0,18,mat(0x74675a),-43,8.5,z);
+    box(42,1.0,18,mat(0x74675a),43,8.5,z);
+  }
+
+  for(let z=-70;z>-240;z-=55){
+    makeCrane(-27,z);
+    makeCrane(27,z-18);
+  }
+
+  for(let i=0;i<34;i++){
+    let side=Math.random()<.5?-1:1;
+    let x=side*(15+Math.random()*72);
+    let z=-260+Math.random()*340;
+    let s=.7+Math.random()*2.4;
+    let r=cyl(s,s*1.2,mat(0x504b45),x,s/2,z,0);
+    r.rotation.z=Math.random();
+    r.rotation.x=Math.random();
+  }
+}
+
+function makeTruck(){
+  truck=new THREE.Group();
+  scene.add(truck);
+  truck.position.set(0,0,0);
+
+  truckBody=new THREE.Group();
+  truck.add(truckBody);
+
+  let yellow=mat(0xe0a400), dark=mat(0x1b1d20), glass=mat(0x17252e);
+
+  let body=box(6,2.6,8,yellow,0,2,0);
+  body.parent=truckBody;scene.remove(body);truckBody.add(body);
+
+  let cab=box(5.2,3.2,3.2,yellow,0,4,-2.2);
+  cab.parent=truckBody;scene.remove(cab);truckBody.add(cab);
+
+  let windshield=box(4.5,1.7,.12,glass,0,4.5,-3.84);
+  windshield.parent=truckBody;scene.remove(windshield);truckBody.add(windshield);
+
+  for(let x of [-2.4,2.4]) for(let z of [-2.7,2.7]){
+    let w=cyl(1.25,1.0,dark,x,1.25,z,Math.PI/2);
+    w.parent=truckBody;scene.remove(w);truckBody.add(w);
+  }
+
+  let bumper=box(5.7,.5,.5,dark,0,1,-4.1);
+  bumper.parent=truckBody;scene.remove(bumper);truckBody.add(bumper);
+}
+
+function makeSensor(){
+  sensor=new THREE.Mesh(
+    new THREE.ConeGeometry(6,38,32,1,true),
+    new THREE.MeshBasicMaterial({
+      color:0x00ff66,transparent:true,opacity:.10,
+      side:THREE.DoubleSide,depthWrite:false
+    })
+  );
+  sensor.rotation.x=-Math.PI/2;
+  sensor.position.set(0,2.5,-11);
+  truck.add(sensor);
+}
+
+function makeHeadlights(){
+  headlightL=new THREE.SpotLight(0xfff2cc,4,42,Math.PI/9,0.45,1.4);
+  headlightL.position.set(-2,2.2,-4.4);
+  const targetL=new THREE.Object3D();targetL.position.set(-2,0.6,-45);
+  truck.add(headlightL,targetL);headlightL.target=targetL;headlightL.visible=false;
+
+  headlightR=new THREE.SpotLight(0xfff2cc,4,42,Math.PI/9,0.45,1.4);
+  headlightR.position.set(2,2.2,-4.4);
+  const targetR=new THREE.Object3D();targetR.position.set(2,0.6,-45);
+  truck.add(headlightR,targetR);headlightR.target=targetR;headlightR.visible=false;
+}
+
+function makeRain(){
+  const count=1000;
+  const positions=new Float32Array(count*3);
+  for(let i=0;i<count;i++){
+    positions[i*3]=(Math.random()-0.5)*140;
+    positions[i*3+1]=Math.random()*55;
+    positions[i*3+2]=-260+Math.random()*380;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  const rmat=new THREE.PointsMaterial({color:0xaad4ff,size:.35,transparent:true,opacity:.6});
+  rain=new THREE.Points(geo,rmat);
+  rain.visible=false;
+  scene.add(rain);
+}
+
+function clearObstacle(){
+  if(obstacle){scene.remove(obstacle);obstacle=null}
+}
+
+function makeObstacleGroup(z){
+  const g=new THREE.Group();
+  g.position.set(0,0,z!==undefined?z:obstacleZ);
+  scene.add(g);
+  return g;
+}
+
+function resetScenario(){
+  running=false;elapsed=0;minClear=999;collisionShown=false;
+  aiState='idle';aiTimer=0;
+  truck.position.set(0,0,0);
+  speed=speedKmh/3.6;
+  clearObstacle();
+
+  $('results').style.display='none';
+  $('warning').style.display='none';
+  $('start').textContent='START TEST';
+
+  obstacleType=$('scenario').value;
+  updateVisibility();
+  setAIStatus('idle');
+
+  if(obstacleType==='truck'){
+    obstacle=makeObstacleGroup();
+    let body=box(5.5,3,7,mat(0xd79d00),0,2,0);
+    let cab=box(4.8,2.3,2.8,mat(0x26343c),0,4,-1.8);
+    body.parent=obstacle;cab.parent=obstacle;
+    scene.remove(body);scene.remove(cab);obstacle.add(body,cab);
+  }
+  else if(obstacleType==='worker'){
+    obstacle=makeObstacleGroup();
+    let body=box(.9,1.7,.6,mat(0x1d8c3a),0,1,0);
+    let head=cyl(.38,.7,mat(0xd7a679),0,2.25,0);
+    body.parent=obstacle;head.parent=obstacle;
+    scene.remove(body);scene.remove(head);obstacle.add(body,head);
+  }
+  else if(obstacleType==='rock'){
+    obstacle=makeObstacleGroup();
+    let rock=cyl(2.2,3.2,mat(0x4d4943),0,1.6,0);
+    rock.scale.set(1.4,1,1);
+    rock.rotation.z=.35;
+    rock.parent=obstacle;scene.remove(rock);obstacle.add(rock);
+  }
+  else if(obstacleType==='crane'){
+    obstacle=makeObstacleGroup();
+    let dark=mat(0x202426),steel=mat(0x626b6e),yellow=mat(0xd09b00);
+    let base=box(8,1.5,7,dark,0,.75,0);
+    let tower=box(1.4,8,1.4,steel,0,5,0);
+    let arm=box(13,1.0,1.0,yellow,3.5,9,0);
+    let mast=box(.8,6,.8,steel,9.5,6,0);
+    let load=box(2.4,2.0,2.4,yellow,9.5,2.5,0);
+    [base,tower,arm,mast,load].forEach(o=>{
+      o.parent=obstacle;scene.remove(o);obstacle.add(o)
+    });
+  }
+  else if(obstacleType==='oncomingCar'){
+    obstacle=makeObstacleGroup(-190);
+    let body=box(1.8,1.1,4.2,mat(0xb23b3b),0,.9,0);
+    let cab=box(1.6,.8,2.0,mat(0x1c1f22),0,1.7,-.2);
+    body.parent=obstacle;cab.parent=obstacle;
+    scene.remove(body);scene.remove(cab);obstacle.add(body,cab);
+    obstacle.userData.oncomingSpeed=45/3.6;
+  }
+  else if(obstacleType==='oncomingTruck'){
+    obstacle=makeObstacleGroup(-190);
+    let body=box(5.2,2.8,7.5,mat(0xd79d00),0,2,0);
+    let cab=box(4.6,2.2,2.6,mat(0x26343c),0,3.9,-1.7);
+    body.parent=obstacle;cab.parent=obstacle;
+    scene.remove(body);scene.remove(cab);obstacle.add(body,cab);
+    obstacle.userData.oncomingSpeed=32/3.6;
+  }
+  else if(obstacleType==='wreckCrane'){
+    obstacle=makeObstacleGroup();
+    let dark=mat(0x202426),steel=mat(0x626b6e),yellow=mat(0xd09b00),red=mat(0x8a2020);
+    let base=box(8,1.5,7,dark,3,.75,0);
+    let tower=box(1.4,8,1.4,steel,3,5,0);
+    let arm=box(13,1.0,1.0,yellow,6.5,9,0);
+    [base,tower,arm].forEach(o=>{o.parent=obstacle;scene.remove(o);obstacle.add(o)});
+    let wreck=box(1.8,1.0,4.0,red,1,.7,1.5);
+    wreck.rotation.y=.6; wreck.rotation.z=.25;
+    wreck.parent=obstacle;scene.remove(wreck);obstacle.add(wreck);
+  }
+  else if(obstacleType==='wreckRavine'){
+    obstacle=makeObstacleGroup();
+    let steel=mat(0x8a8f93),red=mat(0x8a2020);
+    let post1=cyl(.12,1.1,steel,8.0,.55,-1.5,0); post1.rotation.z=.4;
+    let post2=cyl(.12,1.1,steel,8.6,.55,1.8,0);
+    [post1,post2].forEach(o=>{o.parent=obstacle;scene.remove(o);obstacle.add(o)});
+    let wreck=box(1.8,1.0,4.0,red,5.5,.4,0);
+    wreck.rotation.x=-.5; wreck.rotation.y=.3;
+    wreck.parent=obstacle;scene.remove(wreck);obstacle.add(wreck);
+  }
+
+  updateHUD(Infinity,'SAFE','LOW RISK','None');
+  setSensorBoard('green',Infinity);
+}
+
+function startTest(){
+  resetScenario();
+  running=true;
+  speedKmh=+$('speedSlider').value;
+  speed=speedKmh/3.6;
+  $('start').textContent='RUNNING...';
+  $('visModalBackdrop').style.display='none';
+}
+
+function updateHUD(dist,ttc,risk,obj){
+  $('speed').textContent=Math.max(0,Math.round(speed*3.6))+' km/h';
+  $('distance').textContent=isFinite(dist)?dist.toFixed(1)+' m':'—';
+  $('ttc').textContent=ttc;
+  $('risk').textContent=risk;
+  $('risk').style.background=
+    risk.includes('CRITICAL')?'#b91c1c':
+    risk.includes('WARNING')?'#c88a0a':'#167d39';
+  $('object').textContent=obj;
+}
+
+function setSensorBoard(zone,dist){
+  const g=$('sg'),y=$('sy'),r=$('sr');
+  [g,y,r].forEach(e=>e.classList.remove('active','blink'));
+
+  if(zone==='green'){
+    g.classList.add('active');
+    $('sensorRange').textContent='GREEN • NO OBSTACLE WITHIN 40 m';
+  }else if(zone==='yellow'){
+    y.classList.add('active','blink');
+    $('sensorRange').textContent='YELLOW • OBSTACLE 30–40 m';
+  }else{
+    r.classList.add('active','blink');
+    $('sensorRange').textContent='RED • OBSTACLE 0–30 m';
+  }
+}
+
+function setAIStatus(state,name,dist){
+  const el=$('aiDetect');
+  if(state==='idle'){
+    el.textContent='STATUS: MONITORING — NO OBJECT IN RANGE';
+    el.style.color='#8fdc9e';
+    el.classList.remove('pulse');
+  }else if(state==='scanning'){
+    el.textContent='🔍 SENSOR CONTACT — AI ANALYZING SIGNAL...';
+    el.style.color='#f0b429';
+    el.classList.add('pulse');
+  }else if(state==='confirmed'){
+    el.textContent='🚨 OBSTACLE DETECTED: '+name+(isFinite(dist)?'  •  '+dist.toFixed(1)+' m':'');
+    el.style.color='#ff5b5b';
+    el.classList.remove('pulse');
+  }
+}
+
+function typeNameOf(type){
+  return type==='truck'?'MINING TRUCK':
+         type==='worker'?'WORKER':
+         type==='crane'?'BLOCK CRANE':
+         type==='oncomingCar'?'ONCOMING CAR (WRONG SIDE)':
+         type==='oncomingTruck'?'ONCOMING MINE TRUCK (WRONG SIDE)':
+         type==='wreckCrane'?'CRASHED VEHICLE AT CRANE':
+         type==='wreckRavine'?'CRASHED VEHICLE — RAVINE EDGE':
+         'ROCK / BOULDER';
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  let dt=Math.min(.035,clock.getDelta());
+
+  if(rain.visible){
+    const pos=rain.geometry.attributes.position;
+    for(let i=0;i<pos.count;i++){
+      let y=pos.getY(i)-dt*42;
+      if(y<0)y=50+Math.random()*5;
+      pos.setY(i,y);
+    }
+    pos.needsUpdate=true;
+  }
+
+  if(running && obstacle){
+    elapsed += dt;
+
+    const raycaster=new THREE.Raycaster();
+    const origin=truck.localToWorld(new THREE.Vector3(0,2.2,-4.5));
+
+    const directions=[
+      new THREE.Vector3(0,0,-1),
+      new THREE.Vector3(-.12,0,-.99).normalize(),
+      new THREE.Vector3(.12,0,-.99).normalize(),
+      new THREE.Vector3(-.28,0,-.96).normalize(),
+      new THREE.Vector3(.28,0,-.96).normalize()
+    ];
+
+    let rayDistance=Infinity;
+    for(const d of directions){
+      raycaster.set(origin,d);
+      raycaster.far=90;
+      const hits=raycaster.intersectObject(obstacle,true);
+      if(hits.length)rayDistance=Math.min(rayDistance,hits[0].distance);
+    }
+
+    const truckBox=new THREE.Box3().setFromObject(truckBody);
+    const obstacleBox=new THREE.Box3().setFromObject(obstacle);
+
+    const truckFrontZ=truckBox.min.z;
+    const obstacleNearZ=obstacleBox.max.z;
+    const boxDistance=Math.max(0,truckFrontZ-obstacleNearZ);
+
+    const truckCenterX=(truckBox.min.x+truckBox.max.x)/2;
+    const obstacleCenterX=(obstacleBox.min.x+obstacleBox.max.x)/2;
+    const lateralGap=Math.abs(truckCenterX-obstacleCenterX);
+
+    let dist=Math.min(rayDistance,boxDistance);
+    if(!isFinite(dist)||lateralGap>7.5)dist=Infinity;
+
+    const typeName=typeNameOf(obstacleType);
+
+    // AI detection / verification pipeline — independent of visual fog/night/rain.
+    if(isFinite(dist)&&dist<=SCAN_RANGE){
+      if(aiState==='idle'){
+        aiState='scanning';aiTimer=SCAN_TIME;
+      }
+      if(aiState==='scanning'){
+        aiTimer-=dt;
+        setAIStatus('scanning');
+        if(aiTimer<=0)aiState='confirmed';
+      }else if(aiState==='confirmed'){
+        setAIStatus('confirmed',typeName,dist);
+      }
+    }
+
+    // Sensor board zone — intentionally independent of braking and of visibility.
+    if(!isFinite(dist)||dist>40){
+      setSensorBoard('green',dist);
+    }else if(dist>30){
+      setSensorBoard('yellow',dist);
+    }else{
+      setSensorBoard('red',dist);
+    }
+
+    const obstacleSpeed=(obstacle.userData&&obstacle.userData.oncomingSpeed)?obstacle.userData.oncomingSpeed:0;
+    const closingSpeed=Math.max(speed+obstacleSpeed,.01);
+    const ttc=isFinite(dist)?dist/closingSpeed:Infinity;
+
+    let risk='LOW RISK',label='SAFE';
+    if(isFinite(dist)){
+      if(dist<=30){
+        risk='CRITICAL RISK';label='CRITICAL';
+      }else if(dist<=40){
+        risk='WARNING';label='WARNING';
+      }
+    }
+
+    if(isFinite(dist)){
+      $('warning').style.display='block';
+      if(dist<=30){
+        $('warning').innerHTML='🔴 CRITICAL — OBSTACLE 0–30 m';
+      }else if(dist<=40){
+        $('warning').innerHTML='🟡 WARNING — OBSTACLE 30–40 m';
+      }else{
+        $('warning').style.display='none';
+      }
+    }else{
+      $('warning').style.display='none';
+    }
+
+    // IMPORTANT: no automatic braking. The vehicle always continues moving.
+    truck.position.z-=speed*dt;
+    if(obstacleSpeed>0) obstacle.position.z += obstacleSpeed*dt;
+
+    if(isFinite(dist))minClear=Math.min(minClear,dist);
+
+    updateHUD(
+      isFinite(dist)?dist:999,
+      isFinite(ttc)?ttc.toFixed(2)+' s':'SAFE',
+      risk,
+      isFinite(dist)?typeName:'None'
+    );
+
+    const actualTruckBox=new THREE.Box3().setFromObject(truckBody);
+    const actualObstacleBox=new THREE.Box3().setFromObject(obstacle);
+
+    if(actualTruckBox.intersectsBox(actualObstacleBox)){
+      running=false;
+      collisionShown=true;
+      $('results').style.display='block';
+      $('collisionResult').textContent='COLLISION';
+      $('zoneResult').textContent='RED / 0–30 m';
+      $('clearance').textContent='0.0 m';
+      $('aiResult').textContent = aiState==='confirmed' ? 'CONFIRMED — '+typeName : 'NOT CONFIRMED';
+      $('warning').style.display='block';
+      $('warning').innerHTML='💥 COLLISION — SENSOR DETECTED, VEHICLE CONTINUED';
+      $('start').textContent='START TEST';
+      setSensorBoard('red',0);
+    }
+  }
+
+  let targetZ=truck.position.z+13;
+  camera.position.lerp(new THREE.Vector3(0,8,targetZ),.06);
+  camera.lookAt(new THREE.Vector3(0,2,truck.position.z-18));
+  renderer.render(scene,camera);
+}
+
+const clock=new THREE.Clock();
+init();
+</script>
+</body>
+</html>
 
